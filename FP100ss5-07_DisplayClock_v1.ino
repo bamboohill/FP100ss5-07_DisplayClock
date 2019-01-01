@@ -11,7 +11,7 @@ Upload Speed: -> 921600
 */
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
-#define VERSION "Alpha"
+#define VERSION "Version 1.00"
 
 #include <Wire.h>
 #include <EEPROM.h>
@@ -78,6 +78,7 @@ STTS751 stts;
 #define FLIP_TIME_B 750
 #define FLIP_TIME_W 500
 #define SEG_DELAY   200
+#define SEG_DELAY_NIGHTMODE 750
 
 // Wifi Setting
 //　Local intialization. Once its business is done, there is no need to keep it around
@@ -605,13 +606,13 @@ void timedisplay(){
 }
 void nightmode(){
   Sig7seg_setDash(0);
-  delay(750);
+  delay(SEG_DELAY_NIGHTMODE);
   Sig7seg_setDash(1);
-  delay(750);
+  delay(SEG_DELAY_NIGHTMODE);
   Sig7seg_setDash(2);
-  delay(750);
+  delay(SEG_DELAY_NIGHTMODE);
   Sig7seg_setDash(3);
-  delay(750);
+  delay(SEG_DELAY_NIGHTMODE);
 }
 
 // ===============================
