@@ -9,22 +9,22 @@ Debug Level: -> None
 Reset Method: -> nodemcu
 Upload Speed: -> 921600
 */
-#define countof(a) (sizeof(a) / sizeof(a[0]))
-
 #define VERSION "Version 1.00"
+
+#define countof(a) (sizeof(a) / sizeof(a[0]))
 
 #include <Wire.h>
 #include <EEPROM.h>
 #include <pgmspace.h>
+#include <Ticker.h>
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
 #include <WiFiUdp.h>
-#include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
-
-#include <Ticker.h>
+#include <WiFiManager.h>
+//https://github.com/tzapu/WiFiManager
 
 // DS1307(RTC)
 #include "RtcDS1307.h"
@@ -32,14 +32,12 @@ RtcDS1307<TwoWire> Rtc(Wire);
 int timedata;
 int clockdata[14];
 bool RTCInterruptFlag = false;
+Ticker rtc_setting_delay; // Ticker Setting
 
 void ICACHE_RAM_ATTR RTCInterrupt() {
   //Serial.println("RTC Interrupt...");
   RTCInterruptFlag = true;
 }
-
-// Ticker Setting
-Ticker rtc_setting_delay;
 
 // PCFPCF8574(I/O-Extension)
 #include "pcf8574_esp.h"
@@ -56,13 +54,15 @@ void ICACHE_RAM_ATTR PCFInterrupt() {
 STTS751 stts;
 
 // ESP8266 Pin-Config
-#define CLOCK 13//SH_CP(11)/ESP8266(13)
-#define LATCH 15//ST_CP(12)/ESP8266(15)
-#define DATA  12//DS(14)/ESP8266(12)
-#define SEG   16//283(A0)/ESP8266(16)
+#define CLOCK     13//SH_CP(11)/ESP8266(13)
+#define LATCH     15//ST_CP(12)/ESP8266(15)
+#define DATA      12//DS(14)/ESP8266(12)
+#define SEG       16//283(A0)/ESP8266(16)
 
 #define PFC_INT   4
 #define RTC_INT   5
+
+#define LUX       A0
 
 // PCF857x Pin-Config
 #define LED_1   1
@@ -73,10 +73,10 @@ STTS751 stts;
 #define SW_3    5
 
 // ElectroDisplay Setting
-#define SIGNAL_DELAY 350
+#define SIGNAL_DELAY 350  // delayMicroseconds
+#define FLIP_TIME_B 750   // delayMicroseconds
+#define FLIP_TIME_W 500   // delayMicroseconds
 
-#define FLIP_TIME_B 750
-#define FLIP_TIME_W 500
 #define SEG_DELAY   200
 #define SEG_DELAY_NIGHTMODE 750
 
@@ -102,24 +102,12 @@ static const char* ntpServerName = "ntp.nict.jp";
 //static const char* ntpServerName = "ntp2.jst.mfeed.ad.jp";
 //static const char* ntpServerName = "ntp3.jst.mfeed.ad.jp";
 
-//const int timeZone = 0;     // Central European Time
 const int timeZone = +9;     // Japan Time
-
-const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
-byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-
-bool DisplayFlag = true, mt = true, send_ntp_flag = false, TempDispFlag = false;
-long ntp_response_delay,beginWait;
 
 // TCP server at port 80 will respond to HTTP requests
 WiFiServer server(LOCAL_PORT_WEB);
 
-// Variable
-const int vluxPin = A0;
-const int VOLT = 3.3;
-const int ANALOG_MAX = 1024;
-const int RES = 10000;
-
+// 7Segment-Control
 uint8_t BinaryString[3];
 
 static const uint8_t numbertable[] = {
@@ -172,11 +160,42 @@ static const uint8_t numbertable[] = {
   0b11011000  // 38 Z
 };
 
+// Variable
+const int VOLT = 3.3;
+const int ANALOG_MAX = 1024;
+const int RES = 10000;
+const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
+
+byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
+bool DisplayFlag = true, mt = true, send_ntp_flag = false, TempDispFlag = false;
+long ntp_response_delay,beginWait;
+
 // Setup Section
 void setup() {
   // Serial Setup
   Serial.begin(115200);
+
+  // Pin Setup
+  pinMode(DATA, OUTPUT);
+  pinMode(CLOCK, OUTPUT);
+  pinMode(LATCH, OUTPUT);
+  pinMode(SEG, OUTPUT);
   
+  pinMode(PFC_INT, INPUT_PULLUP);
+  pinMode(RTC_INT, INPUT);
+
+  // Disable ALL-Pins
+ for (uint8_t m = 0; m < 2; m++) {
+    shiftOut(DATA, CLOCK, MSBFIRST, 0);
+  }
+  digitalWrite(LATCH, HIGH);
+  digitalWrite(LATCH, LOW);
+  digitalWrite(SEG, LOW);
+  
+  Sig7seg_clear_all();
+  delay(250);
+
+  // SystemInfomation
   Serial.println("1inch ElectromagneticDisplay-Clock Starting up...");
   Serial.println();
   
@@ -194,26 +213,10 @@ void setup() {
   Serial.print( F("DATE & Time: ") );Serial.print(__DATE__);Serial.println(__TIME__);
   Serial.println();
 
-  // Pin Setup
-  pinMode(DATA, OUTPUT);
-  pinMode(CLOCK, OUTPUT);
-  pinMode(LATCH, OUTPUT);
-  pinMode(SEG, OUTPUT);
-  
-  pinMode(PFC_INT, INPUT_PULLUP);
-  pinMode(RTC_INT, INPUT);
-  
-  // Disable ALL-Pins
- for (uint8_t m = 0; m < 2; m++) {
-    shiftOut(DATA, CLOCK, MSBFIRST, 0);
-  }
-  digitalWrite(LATCH, HIGH);
-  digitalWrite(LATCH, LOW);
-  digitalWrite(SEG, LOW);
-  
-  Sig7seg_clear_all();
-  delay(250); 
-  
+  // EEPROM
+  EEPROM.begin(512);
+
+  // 7Segment StartAnimation
   for (uint8_t dig=0; dig<4; dig++){
     Sig7seg_setSegments(0b10000000,dig);
     delay(200);
@@ -230,19 +233,15 @@ void setup() {
   }
   delay(2500);
 
-  // EEPROM
-  EEPROM.begin(512);
-  
-  byte error, address;
-  int nDevices;
-  
   //I2C Setup
-  Wire.begin(2,14);//esp8266
+  byte error, address;
+  int nDevices = 0;
+
+  Wire.begin(2,14);
   Wire.setClock(400000L);
   
   Serial.println("Scanning...");
 
-  nDevices = 0;
   for(address = 1; address < 127; address++ ) 
   {
     // The i2c_scanner uses the return value of
@@ -273,7 +272,7 @@ void setup() {
     Serial.println("No I2C devices found\n");
   else
     Serial.println("done\n");
-
+  
   //DS1307
   Rtc.Begin();
   Serial.println("RTC Powerup...");
@@ -281,7 +280,6 @@ void setup() {
   // if you are using ESP-01 then uncomment the line below to reset the pins to
   // the available pins for SDA, SCL
   // Wire.begin(0, 2); // due to limited pins, use pin 0 and 2 for SDA, SCL
-
   RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
   printDateTime(compiled);
   Serial.println();
@@ -432,7 +430,7 @@ void loop() {
   // RTC interrupt
   //////////////////////////
   if(RTCInterruptFlag){
-    int reading = analogRead(vluxPin);
+    int reading = analogRead(LUX);
     float voltage = ((long)reading * VOLT * 1000) / ANALOG_MAX;
     float microamp = (voltage * RES) / 1000;
     float lx = microamp / (290 / 100);
@@ -583,10 +581,6 @@ void loop() {
       //    1) the battery on the device is low or even missing and the power line was disconnected
       Serial.println("RTC lost confidence in the DateTime!");
   }
-
-  // Finalyze Section
-
-  
 }
 void timedisplay(){
   RtcDateTime dtime(Rtc.GetDateTime());
@@ -594,7 +588,7 @@ void timedisplay(){
   uint8_t dhour = dtime.Hour();
 
   if(!mt){dhour = dhour % 12;}
-
+  
   Sig7seg_setSegments(numbertable[dhour/10],0);
   delay(SEG_DELAY);
   Sig7seg_setSegments(numbertable[dhour%10],1);
