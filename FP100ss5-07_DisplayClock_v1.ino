@@ -77,7 +77,7 @@ STTS751 stts;
 
 #define FLIP_TIME_B 750
 #define FLIP_TIME_W 500
-#define SEG_DELAY   10
+#define SEG_DELAY   200
 
 // Wifi Setting
 //　Local intialization. Once its business is done, there is no need to keep it around
