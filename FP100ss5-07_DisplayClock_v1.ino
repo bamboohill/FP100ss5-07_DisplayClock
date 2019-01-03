@@ -45,7 +45,7 @@ PCF857x pcf8574(0x20, false);
 bool PCFInterruptFlag = false;
 
 void ICACHE_RAM_ATTR PCFInterrupt() {
-  //Serial.println("PFC Interrupt...");
+  Serial.println("PFC Interrupt...");
   PCFInterruptFlag = true;
 }
 
@@ -191,9 +191,6 @@ void setup() {
   digitalWrite(LATCH, HIGH);
   digitalWrite(LATCH, LOW);
   digitalWrite(SEG, LOW);
-  
-  Sig7seg_clear_all();
-  delay(250);
 
   // SystemInfomation
   Serial.println("1inch ElectromagneticDisplay-Clock Starting up...");
@@ -217,6 +214,9 @@ void setup() {
   EEPROM.begin(512);
 
   // 7Segment StartAnimation
+  Sig7seg_clear_all();
+  delay(1000);
+
   for (uint8_t dig=0; dig<4; dig++){
     Sig7seg_setSegments(0b10000000,dig);
     delay(200);
@@ -540,6 +540,8 @@ void loop() {
       // Serial.println("SW1 is LOW!");
     }
     if(pcf8574.read(SW_2)==LOW) {
+      
+      // FlagChange
       DisplayFlag = !DisplayFlag;
 
       if(DisplayFlag){
@@ -561,10 +563,13 @@ void loop() {
       //Serial.println("SW2 is LOW!");
     }
     if(pcf8574.read(SW_3)==LOW) {
+      
+      // FlagChange
       TempDispFlag= !TempDispFlag;
 
       // TimeDisplay
-      if(!TempDispFlag){timedisplay();}
+      delay(10);
+      if(!TempDispFlag)timedisplay();
 
       // Debug Print
       //pcf8574.write(LED_3,!pcf8574.read(LED_3));
@@ -866,9 +871,12 @@ void rtc_restart(){
 // ===============================
 
 void Sig7seg_clear_all(void) {
-  for (uint8_t m = 0; m < 4; m++) {
-    Sig7seg_setSegments(0b00000000,m);
-    delay(35);
+  for (uint8_t l = 0; l < 2; l++) {
+    for (uint8_t m = 0; m < 4; m++) {
+      Sig7seg_setSegments(0b00000000,m);
+      delay(25);
+    }
+    delay(50);
   }
 }
 void Sig7seg_setDash(uint8_t dig){
@@ -969,25 +977,27 @@ void Sig7seg_setSegments(uint8_t bits,uint8_t dig){
   noInterrupts();
   shiftOut(DATA, CLOCK, MSBFIRST, rbits_2);
   shiftOut(DATA, CLOCK, MSBFIRST, rbits_1);
-  interrupts();
+  //interrupts();
   delayMicroseconds(SIGNAL_DELAY);
   
   digitalWrite(LATCH, HIGH);
   digitalWrite(SEG, LOW);
   delayMicroseconds(FLIP_TIME_B);
   digitalWrite(LATCH, LOW);
-  
+  interrupts();
+
   noInterrupts();
   shiftOut(DATA, CLOCK, MSBFIRST, bits_2);
   shiftOut(DATA, CLOCK, MSBFIRST, bits_1);
-  interrupts();
+  //interrupts();
   delayMicroseconds(SIGNAL_DELAY);
   
   digitalWrite(LATCH, HIGH);
   digitalWrite(SEG, HIGH);
   delayMicroseconds(FLIP_TIME_W);
   digitalWrite(LATCH, LOW);
-  
+  interrupts();
+
 //  noInterrupts();
 //  for (uint8_t m = 0; m < 2; m++) {
 //    shiftOut(DATA, CLOCK, MSBFIRST, 0b00000000);
