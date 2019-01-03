@@ -167,7 +167,7 @@ const int RES = 10000;
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-bool DisplayFlag = true, mt = true, send_ntp_flag = false, TempDispFlag = false;
+bool DisplayFlag = true,NightFlag = false, MilitaryTime = true, send_ntp_flag = false, TempDispFlag = false;
 long ntp_response_delay,beginWait;
 
 // Setup Section
@@ -486,7 +486,8 @@ void loop() {
       Serial.print(":");
       Serial.println(dtime.Second());
 
-    }else if(TempDispFlag & lx > 100 & DisplayFlag){
+    // XX.X TemperatureDisplay
+    }else if(TempDispFlag & dtime.Second() % 5 == 0 & lx > 100 & DisplayFlag){
       Sig7seg_setSegments(numbertable[(int)temperature/10],0);
       delay(SEG_DELAY);
       Sig7seg_setSegments(numbertable[(int)temperature%10],1);
@@ -495,9 +496,12 @@ void loop() {
       delay(SEG_DELAY);
       Sig7seg_setSegments(numbertable[12],3);
       delay(SEG_DELAY);
-    }else if(lx < 100){
+    }else if(lx < 100 & dtime.Second() % 2 == 0 & !NightFlag){
       nightmode();
+      NightFlag = true;
       Serial.println("NightMode");
+    }else if(lx > 100 & DisplayFlag){
+      NightFlag = false;
     }
 
     // Send NTP-Packet
@@ -530,7 +534,7 @@ void loop() {
     
     Serial.println("Got an interrupt: ");
     if(pcf8574.read(SW_1)==LOW) {
-      mt = !mt;
+      MilitaryTime = !MilitaryTime;
 
       // TimeDisplay
       timedisplay();
@@ -592,7 +596,7 @@ void timedisplay(){
 
   uint8_t dhour = dtime.Hour();
 
-  if(!mt){dhour = dhour % 12;}
+  if(!MilitaryTime){dhour = dhour % 12;}
   
   Sig7seg_setSegments(numbertable[dhour/10],0);
   delay(SEG_DELAY);
