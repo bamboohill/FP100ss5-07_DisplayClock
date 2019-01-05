@@ -46,14 +46,7 @@ bool PCFInterruptFlag = false,StopwatchFlag = false,TimeCount = false;
 
 void ICACHE_RAM_ATTR PCFInterrupt() {
   Serial.println("PFC Interrupt...");
-
-  //if(pcf8574.read(SW_3)==LOW) {
-    //if(StopwatchFlag & TimeCount){
-      //TimeCount = false;
-      //delay(debouns);//DebounsTime
-    //}
-  //}
-
+  
   PCFInterruptFlag = true;
 }
 
@@ -174,8 +167,8 @@ const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 bool DisplayFlag = true, NightFlag = false, MilitaryTime = true, Send_ntp_Flag = false, TempDispFlag = false;
-int TimeCounter = 0;
 long ntp_response_delay,beginWait;
+int TimeCounter = 0;
 
 // Setup Section
 void setup() {
@@ -481,7 +474,7 @@ void loop() {
       // TimeDisplay
       timedisplay();
 
-      Serial.println("ClockTime Diaplay");
+      Serial.print("ClockTime Diaplay : ");
       Serial.print(dtime.Year());
       Serial.print("/");
       Serial.print(dtime.Month());
@@ -504,6 +497,11 @@ void loop() {
       delay(SEG_DELAY);
       Sig7seg_setSegments(numbertable[12],3);
       delay(SEG_DELAY);
+
+      Serial.print("Temperature Diaplay : ");
+      Serial.print(temperature);
+      Serial.println("℃");
+
     }else if(lx < 100 & dtime.Second() % 2 == 0 & !NightFlag){
       nightmode();
       NightFlag = true;
@@ -544,11 +542,10 @@ void loop() {
     Serial.println("Got an interrupt: ");
 
     if(pcf8574.read(SW_1)==LOW) {
-      //delay(debouns);//DebounsTime
-
+      
       if(StopwatchFlag & !TimeCount){
         TimeCount = true;
-        //delay(debouns);//DebounsTime
+        
       }else{
         MilitaryTime = !MilitaryTime;
         Serial.println("12H24H_Mode");
@@ -562,8 +559,7 @@ void loop() {
       //pcf8574.write(LED_1,!pcf8574.read(LED_1));
       // Serial.println("SW1 is LOW!");
     }else if(pcf8574.read(SW_2)==LOW) {
-      //delay(debouns);//DebounsTime
-
+      
       // FlagChange
       DisplayFlag = !DisplayFlag;
 
@@ -614,8 +610,7 @@ void loop() {
       //pcf8574.write(LED_2,!pcf8574.read(LED_2));
       //Serial.println("SW2 is LOW!");
     }else if(pcf8574.read(SW_3)==LOW) {
-      //delay(debouns);//DebounsTime
-
+      
       // FlagChange
       TempDispFlag= !TempDispFlag;
 
@@ -624,7 +619,7 @@ void loop() {
         timedisplay();
         Serial.println("TimeMode");
       }else{
-        Serial.println("TemphMode");
+        Serial.println("TempMode");
       }
       pcf8574.write(SW_3,HIGH);//SW3
 
@@ -639,7 +634,6 @@ void loop() {
 
   // StopWatchMode
   if(StopwatchFlag & TimeCount){
-    
     for(int a=0; a<10; a++){
       Sig7seg_setSegments(numbertable[a],0);
       for(int b=0; b<10; b++){
@@ -648,13 +642,20 @@ void loop() {
           Sig7seg_setSegments(numbertable[c],2);
           for(int d=0; d<10; d++){
             Sig7seg_setSegments(numbertable[d],3);
+
             noInterrupts();
+
             while (millis() % 10 != 0) {
               if(pcf8574.read(SW_3)==LOW){
+                
+                pcf8574.write(SW_3,HIGH);//SW3
+                delay(30);
+                
+                interrupts();
+                
                 TimeCount = false;
                 TempDispFlag = false;
-                delay(30);
-                interrupts();
+
                 goto timebreak;
               }
             }
