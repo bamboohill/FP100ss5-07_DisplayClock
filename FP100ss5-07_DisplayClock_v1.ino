@@ -42,10 +42,18 @@ void ICACHE_RAM_ATTR RTCInterrupt() {
 // PCFPCF8574(I/O-Extension)
 #include "pcf8574_esp.h"
 PCF857x pcf8574(0x20, false);
-bool PCFInterruptFlag = false;
+bool PCFInterruptFlag = false,StopwatchFlag = false,TimeCount = false;
 
 void ICACHE_RAM_ATTR PCFInterrupt() {
   Serial.println("PFC Interrupt...");
+
+  //if(pcf8574.read(SW_3)==LOW) {
+    //if(StopwatchFlag & TimeCount){
+      //TimeCount = false;
+      //delay(debouns);//DebounsTime
+    //}
+  //}
+
   PCFInterruptFlag = true;
 }
 
@@ -161,13 +169,12 @@ static const uint8_t numbertable[] = {
 };
 
 // Variable
-const int VOLT = 3.3;
-const int ANALOG_MAX = 1024;
-const int RES = 10000;
+const int VOLT = 3.3, ANALOG_MAX = 1024, RES = 10000;
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-bool DisplayFlag = true,NightFlag = false, MilitaryTime = true, send_ntp_flag = false, TempDispFlag = false;
+bool DisplayFlag = true, NightFlag = false, MilitaryTime = true, Send_ntp_Flag = false, TempDispFlag = false;
+int TimeCounter = 0;
 long ntp_response_delay,beginWait;
 
 // Setup Section
@@ -422,9 +429,9 @@ void loop() {
       break;
     }
   }
-  if(millis() - beginWait > 850 & send_ntp_flag){
+  if(millis() - beginWait > 850 & Send_ntp_Flag){
     Serial.println("No NTP Response...");
-    send_ntp_flag = false;
+    Send_ntp_Flag = false;
   }
 
   //////////////////////////
@@ -518,10 +525,11 @@ void loop() {
       // DelayCalculation
       ntp_response_delay = micros(); // Tc1
       beginWait = millis();
-      send_ntp_flag = true;
+      Send_ntp_Flag = true;
     }
     
     // RTC FlagSet
+    //Serial.println("RTC_Interrupt");
     RTCInterruptFlag=false;
   }
 
@@ -534,47 +542,91 @@ void loop() {
     // Any pin you wish to use as input must be written HIGH and be pulled LOW to generate an interrupt.
     
     Serial.println("Got an interrupt: ");
-    if(pcf8574.read(SW_1)==LOW) {
-      MilitaryTime = !MilitaryTime;
 
-      // TimeDisplay
-      timedisplay();
+    if(pcf8574.read(SW_1)==LOW) {
+      //delay(debouns);//DebounsTime
+
+      if(StopwatchFlag & !TimeCount){
+        TimeCount = true;
+        //delay(debouns);//DebounsTime
+      }else{
+        MilitaryTime = !MilitaryTime;
+        Serial.println("12H24H_Mode");
+
+        // TimeDisplay
+        timedisplay();
+      }
+      pcf8574.write(SW_1,HIGH);//SW1
 
       // Debug Print
       //pcf8574.write(LED_1,!pcf8574.read(LED_1));
       // Serial.println("SW1 is LOW!");
-    }
-    if(pcf8574.read(SW_2)==LOW) {
-      
+    }else if(pcf8574.read(SW_2)==LOW) {
+      //delay(debouns);//DebounsTime
+
       // FlagChange
       DisplayFlag = !DisplayFlag;
 
-      if(DisplayFlag){
+      if(DisplayFlag & !StopwatchFlag){
         // TimeDisplay
         timedisplay();
       }else{
-        Sig7seg_setDash(0);
-        delay(SEG_DELAY);
-        Sig7seg_setDash(1);
-        delay(SEG_DELAY);
-        Sig7seg_setDash(2);
-        delay(SEG_DELAY);
-        Sig7seg_setDash(3);
-        delay(SEG_DELAY);
+        if(!StopwatchFlag){
+          Sig7seg_setDash(0);
+          delay(SEG_DELAY);
+          Sig7seg_setDash(1);
+          delay(SEG_DELAY);
+          Sig7seg_setDash(2);
+          delay(SEG_DELAY);
+          Sig7seg_setDash(3);
+          delay(SEG_DELAY);
+
+          StopwatchFlag = true;
+          
+          Serial.println("StopWatchMode");
+
+        }else if(StopwatchFlag & TimeCounter > 0){
+          Sig7seg_setDash(0);
+          delay(SEG_DELAY);
+          Sig7seg_setDash(1);
+          delay(SEG_DELAY);
+          Sig7seg_setDash(2);
+          delay(SEG_DELAY);
+          Sig7seg_setDash(3);
+          delay(SEG_DELAY);
+
+          TimeCounter = 0;
+          TimeCount = false;
+          
+          Serial.println("StopWatchReset");
+
+        }else if(StopwatchFlag & !TimeCount){
+          StopwatchFlag = false;
+          
+          timedisplay();
+
+          Serial.println("ClockMode");
+        }
       }
-      
+      pcf8574.write(SW_2,HIGH);//SW2
+
       // Debug Print
       //pcf8574.write(LED_2,!pcf8574.read(LED_2));
       //Serial.println("SW2 is LOW!");
-    }
-    if(pcf8574.read(SW_3)==LOW) {
-      
+    }else if(pcf8574.read(SW_3)==LOW) {
+      //delay(debouns);//DebounsTime
+
       // FlagChange
       TempDispFlag= !TempDispFlag;
 
       // TimeDisplay
-      delay(10);
-      if(!TempDispFlag)timedisplay();
+      if(!TempDispFlag){
+        timedisplay();
+        Serial.println("TimeMode");
+      }else{
+        Serial.println("TemphMode");
+      }
+      pcf8574.write(SW_3,HIGH);//SW3
 
       // Debug Print
       //pcf8574.write(LED_3,!pcf8574.read(LED_3));
@@ -584,7 +636,40 @@ void loop() {
     // PFC FlagSet
     PCFInterruptFlag=false;
   }
+
+  // StopWatchMode
+  if(StopwatchFlag & TimeCount){
+    
+    for(int a=0; a<10; a++){
+      Sig7seg_setSegments(numbertable[a],0);
+      for(int b=0; b<10; b++){
+        Sig7seg_setSegments(numbertable[b],1);
+        for(int c=0; c<10; c++){
+          Sig7seg_setSegments(numbertable[c],2);
+          for(int d=0; d<10; d++){
+            Sig7seg_setSegments(numbertable[d],3);
+            noInterrupts();
+            while (millis() % 10 != 0) {
+              if(pcf8574.read(SW_3)==LOW){
+                TimeCount = false;
+                TempDispFlag = false;
+                delay(30);
+                interrupts();
+                goto timebreak;
+              }
+            }
+            TimeCounter++;
+            interrupts();
+          }
+        }
+        yield();
+      }
+    }
+    delay(250);
+  }
   
+  timebreak:
+
   if (!Rtc.IsDateTimeValid()) 
   {
       // Common Cuases:
@@ -835,7 +920,7 @@ time_t getNtppacket(long ntp_response_delay)
   Serial.print("Code Delay :");
   Serial.println(code_delay);
 
-  send_ntp_flag = false;
+  Send_ntp_Flag = false;
 }
 
 
