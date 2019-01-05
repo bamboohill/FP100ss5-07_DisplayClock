@@ -344,58 +344,59 @@ void setup() {
   pcf8574.resetInterruptPin();
   attachInterrupt(digitalPinToInterrupt(PFC_INT), PCFInterrupt, FALLING);
 
-  // wifi
-  wifiManager.setConfigPortalTimeout(150);
-  wifiManager.autoConnect();
-  pcf8574.write(LED_2,LOW);//LED2
-  Serial.print("WiFi network started");
-  delay(500);
-
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    pcf8574.write(LED_2,!pcf8574.read(LED_2));
-
+  if(pcf8574.read(SW_1)!=LOW){
+    // wifi
+    wifiManager.setConfigPortalTimeout(150);
+    wifiManager.autoConnect();
+    pcf8574.write(LED_2,LOW);//LED2
+    Serial.print("WiFi network started");
     delay(500);
-    Serial.print(".");
-    
-    if(micros()>1000*360)break;
-  }
-  Serial.println();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    
-    Serial.println("WiFi-Connecting...");
-    Serial.print("Connected, IP address: ");
-    Serial.println(WiFi.localIP());
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      pcf8574.write(LED_2,!pcf8574.read(LED_2));
 
-    // Set up mDNS responder:
-    // - first argument is the domain name, in this example
-    //   the fully-qualified domain name is "esp8266.local"
-    // - second argument is the IP address to advertise
-    //   we send our IP address on the WiFi network
-    if (!MDNS.begin("esp8288")) {
-      Serial.println("Error setting up MDNS responder!");
-      while(1) { 
-        delay(1000);
-      }
+      delay(500);
+      Serial.print(".");
+      
+      if(micros()>1000*360)break;
     }
-    Serial.println("mDNS responder started");
+    Serial.println();
 
-    // Start TCP (HTTP) server
-    server.begin();
-    Serial.println("TCP server started");
-    
-    // Add service to MDNS-SD
-    MDNS.addService("http", "tcp", LOCAL_PORT_WEB);
+    if (WiFi.status() == WL_CONNECTED) {
+      
+      Serial.println("WiFi-Connecting...");
+      Serial.print("Connected, IP address: ");
+      Serial.println(WiFi.localIP());
 
-    // Start UDP Service
-    udp.begin(LOCAL_PORT_UDP);
-    Serial.print("UDP server started(Local port): ");
-    Serial.println(udp.localPort());
+      // Set up mDNS responder:
+      // - first argument is the domain name, in this example
+      //   the fully-qualified domain name is "esp8266.local"
+      // - second argument is the IP address to advertise
+      //   we send our IP address on the WiFi network
+      if (!MDNS.begin("esp8288")) {
+        Serial.println("Error setting up MDNS responder!");
+        while(1) { 
+          delay(1000);
+        }
+      }
+      Serial.println("mDNS responder started");
 
-    pcf8574.write(LED_3,LOW);//LED3
+      // Start TCP (HTTP) server
+      server.begin();
+      Serial.println("TCP server started");
+      
+      // Add service to MDNS-SD
+      MDNS.addService("http", "tcp", LOCAL_PORT_WEB);
+      
+      // Start UDP Service
+      udp.begin(LOCAL_PORT_UDP);
+      Serial.print("UDP server started(Local port): ");
+      Serial.println(udp.localPort());
+
+      pcf8574.write(LED_3,LOW);//LED3
+    }
   }
-
   // Initialize END
   delay(2000);
   pcf8574.write(LED_1,HIGH);//LED1
